@@ -1,0 +1,88 @@
+[
+  {
+    "id": "50097dbb-31ff-48c4-8852-884cd2793731",
+    "name": "ชุดนอนไม่ได้นอน",
+    "price": 120,
+    "stock": 97,
+    "description": "ชุดนอนไม่ได้นอน",
+    "images": [
+      "/uploads/product-1775808319567-qcuvce.webp",
+      "/uploads/product-1775808337807-n89xb5.webp"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=PF_6ztNLrMQ&list=RDPF_6ztNLrMQ&start_radio=1"
+  },
+  {
+    "id": "b08a1f04-022f-4818-a1ae-ebf8daf8d07c",
+    "name": "ชุดนอนไม่ได้นอน",
+    "price": 120,
+    "stock": 99,
+    "description": "ชุดนอนไม่ได้นอน",
+    "images": [
+      "/uploads/product-1775808169374-zbw7l9.webp",
+      "/uploads/product-1775808169260-ww9p15.webp",
+      "/uploads/product-1775808169325-67qqm3.webp",
+      "/uploads/product-1775808169349-ymot04.webp"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=PF_6ztNLrMQ&list=RDPF_6ztNLrMQ&start_radio=1"
+  },
+  {
+    "id": "a4f27d9d-6645-4ae1-a6e0-5cce10377600",
+    "name": "เสื้อตราห่าน",
+    "price": 100,
+    "stock": 99,
+    "description": "เสื้อตราห่าน",
+    "images": [
+      "/uploads/product-1775806318395-lf7ugv.webp"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=SKlRUkLDtHw&list=RDzhZ4jzJHk0Y&index=5"
+  },
+  {
+    "id": "dc078d88-a9e6-4360-8781-e4429ac3a8fb",
+    "name": "เสื้อยืด123",
+    "price": 200,
+    "stock": 100,
+    "description": "เสื้อยืด 123",
+    "images": [
+      "/uploads/product-1775806028504-ivtfki.webp",
+      "/uploads/product-1775806511313-69cq6t.webp",
+      "/uploads/product-1775879262022-5pgqt1.jpg"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=zhZ4jzJHk0Y&list=RDzhZ4jzJHk0Y&start_radio=1&pp=0gcJCbcEOCosWNin"
+  },
+  {
+    "id": "demo-hoodie",
+    "name": "ฮู้ดดี้ผ้านุ่ม Cloud Soft",
+    "price": 1290,
+    "stock": 17,
+    "description": "ฮู้ดดี้เนื้อนุ่มใส่สบาย ทรงสวยเรียบง่าย เหมาะกับการใส่ได้ทุกวัน",
+    "images": [
+      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=1200&q=80"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+  },
+  {
+    "id": "demo-sneakers",
+    "name": "รองเท้าผ้าใบ Urban Run",
+    "price": 1890,
+    "stock": 8,
+    "description": "รองเท้าน้ำหนักเบา ระบายอากาศดี เดินสบาย เหมาะกับการใช้งานทุกวัน",
+    "images": [
+      "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?auto=format&fit=crop&w=1200&q=80"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  },
+  {
+    "id": "demo-backpack",
+    "name": "กระเป๋าเป้ Daily Carry",
+    "price": 1590,
+    "stock": 12,
+    "description": "กระเป๋าเป้ใช้งานง่าย จัดของเป็นระเบียบ สายสะพายนุ่ม เหมาะกับการพกทุกวัน",
+    "images": [
+      "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1491637639811-60e2756cc1c7?auto=format&fit=crop&w=1200&q=80"
+    ],
+    "youtubeUrl": "https://www.youtube.com/watch?v=ysz5S6PUM-U"
+  }
+]
