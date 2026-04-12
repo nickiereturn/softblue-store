@@ -1,5 +1,11 @@
-import { AdminLoginForm } from "@/components/admin/admin-login-form";
+import { Suspense } from "react";
+
+import LoginForm from "./LoginForm";
 
 export default function AdminLoginPage() {
-  return <AdminLoginForm />;
+  return (
+    <Suspense fallback={<div className="section-card login-card">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
+  );
 }
