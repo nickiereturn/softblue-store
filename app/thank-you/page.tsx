@@ -3,6 +3,8 @@ import Link from "next/link";
 import { formatPaymentMethod } from "@/lib/format";
 import { PaymentMethod } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 type ThankYouPageProps = {
   searchParams: Promise<{
     orderId?: string;
