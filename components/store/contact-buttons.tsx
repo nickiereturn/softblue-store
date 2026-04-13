@@ -1,6 +1,7 @@
 "use client";
 
-import { CSSProperties } from "react";
+import { CSSProperties, MouseEvent } from "react";
+import Swal from "sweetalert2";
 
 import { contactLinks } from "@/lib/constants";
 
@@ -18,24 +19,28 @@ const iconButtonStyle: CSSProperties = {
   transition: "transform 0.2s ease, background-color 0.2s ease"
 };
 
+function handleMouseEnter(event: MouseEvent<HTMLElement>) {
+  event.currentTarget.style.transform = "translateY(-1px)";
+  event.currentTarget.style.background = "#e3eeff";
+}
+
+function handleMouseLeave(event: MouseEvent<HTMLElement>) {
+  event.currentTarget.style.transform = "translateY(0)";
+  event.currentTarget.style.background = "#eef4ff";
+}
+
 export function ContactButtons() {
   return (
     <div className="contact-actions" aria-label="ช่องทางติดต่อร้านค้า">
       <a
         href={contactLinks.line}
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         aria-label="LINE"
         title="LINE"
         style={iconButtonStyle}
-        onMouseEnter={(event) => {
-          event.currentTarget.style.transform = "translateY(-1px)";
-          event.currentTarget.style.background = "#e3eeff";
-        }}
-        onMouseLeave={(event) => {
-          event.currentTarget.style.transform = "translateY(0)";
-          event.currentTarget.style.background = "#eef4ff";
-        }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <svg
           width="26"
@@ -56,20 +61,20 @@ export function ContactButtons() {
         </svg>
       </a>
 
-      <a
-        href={contactLinks.messenger}
-        target="_blank"
-        rel="noreferrer"
+      <button
+        type="button"
         aria-label="Messenger"
         title="Messenger"
         style={iconButtonStyle}
-        onMouseEnter={(event) => {
-          event.currentTarget.style.transform = "translateY(-1px)";
-          event.currentTarget.style.background = "#e3eeff";
-        }}
-        onMouseLeave={(event) => {
-          event.currentTarget.style.transform = "translateY(0)";
-          event.currentTarget.style.background = "#eef4ff";
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={() => {
+          void Swal.fire({
+            title: "ยังไม่พร้อมใช้งาน",
+            text: "ขออภัยตอนนี้เมสเซนเจอยังไม่พร้อมใช้งาน และเรากำลังจะเปิดใช้งานเร็วนี้",
+            icon: "info",
+            confirmButtonText: "ตกลง"
+          });
         }}
       >
         <svg
@@ -102,7 +107,7 @@ export function ContactButtons() {
             </linearGradient>
           </defs>
         </svg>
-      </a>
+      </button>
     </div>
   );
 }

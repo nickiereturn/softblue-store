@@ -1,23 +1,25 @@
-export function getYoutubeEmbedUrl(url?: string) {
+export function convertToEmbedUrl(url?: string) {
   if (!url) {
     return "";
   }
 
-  try {
-    const parsed = new URL(url);
+  const watchMatch = url.match(/v=([^&]+)/);
 
-    if (parsed.hostname.includes("youtu.be")) {
-      const videoId = parsed.pathname.replace("/", "");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
-    }
-
-    if (parsed.hostname.includes("youtube.com")) {
-      const videoId = parsed.searchParams.get("v");
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : "";
-    }
-  } catch {
-    return "";
+  if (watchMatch?.[1]) {
+    return `https://www.youtube.com/embed/${watchMatch[1]}`;
   }
 
-  return "";
+  const shortMatch = url.match(/youtu\.be\/([^?&/]+)/);
+
+  if (shortMatch?.[1]) {
+    return `https://www.youtube.com/embed/${shortMatch[1]}`;
+  }
+
+  const embedMatch = url.match(/youtube\.com\/embed\/([^?&/]+)/);
+
+  if (embedMatch?.[1]) {
+    return `https://www.youtube.com/embed/${embedMatch[1]}`;
+  }
+
+  return url;
 }

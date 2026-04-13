@@ -18,14 +18,17 @@ export default async function handler(
     }
 
     const product = request.body || {};
+    const hasPrimaryImage =
+      typeof product.image === "string" && product.image.trim().length > 0;
+    const hasImages =
+      Array.isArray(product.images) && product.images.length > 0;
 
     if (
       !product.name ||
       typeof product.price !== "number" ||
       typeof product.stock !== "number" ||
       !product.description ||
-      !Array.isArray(product.images) ||
-      product.images.length === 0
+      (!hasPrimaryImage && !hasImages)
     ) {
       return response.status(400).json({ error: "กรอกข้อมูลไม่ครบถ้วน" });
     }

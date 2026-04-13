@@ -17,11 +17,7 @@ export function formatDate(date: string) {
 
 export function formatPaymentMethod(method: PaymentMethod) {
   if (method === "promptpay") {
-    return "พร้อมเพย์";
-  }
-
-  if (method === "card") {
-    return "บัตรเครดิต (Visa)";
+    return "PromptPay";
   }
 
   return "เก็บเงินปลายทาง";

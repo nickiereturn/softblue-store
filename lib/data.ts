@@ -35,14 +35,12 @@ async function writeJsonFile<T>(filePath: string, value: T) {
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
 }
 
-export async function getProducts() {
-  return readJsonFile<Product[]>(productFile, []);
-}
-
-export async function getProductById(id: string) {
-  const products = await getProducts();
-  return products.find((product) => product.id === id) || null;
-}
+type StoredProduct = Omit<Product, "image" | "images" | "isBestSeller" | "createdAt"> & {
+  image?: string;
+  images?: string[];
+  isBestSeller?: boolean;
+  createdAt?: string;
+};
 
 type ProductInput = {
   id?: string;
@@ -50,20 +48,63 @@ type ProductInput = {
   price: number;
   stock: number;
   description: string;
-  images: string[];
+  image?: string;
+  images?: string[];
   youtubeUrl?: string;
+  isBestSeller?: boolean;
+  createdAt?: string;
 };
 
-function normalizeProduct(input: ProductInput, existingId?: string): Product {
+function normalizeProduct(
+  input: ProductInput,
+  options?: {
+    existingId?: string;
+    existingProduct?: Product | null;
+  }
+): Product {
+  const primaryImage = input.image || input.images?.[0] || "";
+  const images =
+    input.images && input.images.length > 0
+      ? input.images
+      : primaryImage
+        ? [primaryImage]
+        : [];
+
   return {
-    id: existingId || input.id || crypto.randomUUID(),
+    id: options?.existingId || input.id || crypto.randomUUID(),
     name: input.name,
     price: Number(input.price),
     stock: Number(input.stock),
     description: input.description,
-    images: input.images,
-    youtubeUrl: input.youtubeUrl || ""
+    image: primaryImage,
+    images,
+    youtubeUrl: input.youtubeUrl || "",
+    isBestSeller:
+      typeof input.isBestSeller === "boolean"
+        ? input.isBestSeller
+        : options?.existingProduct?.isBestSeller || false,
+    createdAt:
+      input.createdAt ||
+      options?.existingProduct?.createdAt ||
+      new Date().toISOString()
   };
+}
+
+function normalizeStoredProduct(product: StoredProduct): Product {
+  return normalizeProduct(product, {
+    existingId: product.id,
+    existingProduct: null
+  });
+}
+
+export async function getProducts() {
+  const products = await readJsonFile<StoredProduct[]>(productFile, []);
+  return products.map(normalizeStoredProduct);
+}
+
+export async function getProductById(id: string) {
+  const products = await getProducts();
+  return products.find((product) => product.id === id) || null;
 }
 
 export async function saveProduct(input: ProductInput) {
@@ -71,10 +112,11 @@ export async function saveProduct(input: ProductInput) {
   const index = input.id
     ? products.findIndex((product) => product.id === input.id)
     : -1;
-  const product = normalizeProduct(
-    input,
-    index >= 0 ? products[index].id : undefined
-  );
+  const existingProduct = index >= 0 ? products[index] : null;
+  const product = normalizeProduct(input, {
+    existingId: existingProduct?.id,
+    existingProduct
+  });
 
   if (index >= 0) {
     products[index] = product;
@@ -145,7 +187,6 @@ type OrderInput = {
   address: string;
   paymentMethod: PaymentMethod;
   paymentSlip?: string;
-  cardNumber?: string;
   items: Array<{ productId: string; quantity: number }>;
 };
 
@@ -173,7 +214,7 @@ export async function createOrder(input: OrderInput) {
       name: product.name,
       price: product.price,
       quantity: item.quantity,
-      image: product.images[0] || ""
+      image: product.image || product.images[0] || ""
     };
   });
 
@@ -204,7 +245,6 @@ export async function createOrder(input: OrderInput) {
     paymentSlip: input.paymentSlip || "",
     paymentStatus:
       input.paymentMethod === "promptpay" ? "pending" : "confirmed",
-    cardLast4: input.cardNumber?.slice(-4),
     total,
     createdAt: new Date().toISOString(),
     items,

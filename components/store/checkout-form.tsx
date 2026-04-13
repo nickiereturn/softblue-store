@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Swal from "sweetalert2";
 
 import { useCart } from "@/components/store/cart-context";
 import { paymentOptions } from "@/lib/constants";
@@ -13,11 +14,7 @@ type CheckoutState = {
   customerName: string;
   phone: string;
   address: string;
-  paymentMethod: "promptpay" | "card" | "cod";
-  cardName: string;
-  cardNumber: string;
-  expiry: string;
-  cvc: string;
+  paymentMethod: "promptpay" | "cod";
   slipFile: File | null;
 };
 
@@ -26,25 +23,13 @@ const initialState: CheckoutState = {
   phone: "",
   address: "",
   paymentMethod: "promptpay",
-  cardName: "",
-  cardNumber: "",
-  expiry: "",
-  cvc: "",
   slipFile: null
 };
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ได้"));
-    reader.readAsDataURL(file);
-  });
-}
 
 export function CheckoutForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const slipUploadRef = useRef<HTMLDivElement | null>(null);
   const buyNowId = searchParams?.get("buyNow") || null;
   const { items, clearCart } = useCart();
   const [form, setForm] = useState(initialState);
@@ -52,6 +37,8 @@ export function CheckoutForm() {
   const [buyNowProduct, setBuyNowProduct] = useState<Product | null>(null);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showSlipError, setShowSlipError] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
 
   useEffect(() => {
     fetch("/api/products")
@@ -89,24 +76,49 @@ export function CheckoutForm() {
     0
   );
 
+  const promptPayNeedsSlip =
+    form.paymentMethod === "promptpay" && !form.slipFile;
+
+  function scrollToSlipUpload() {
+    slipUploadRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
+  }
+
+  function handlePhoneChange(value: string) {
+    if (!/^\d*$/.test(value)) {
+      setPhoneError("กรุณาใส่เป็นตัวเลขเท่านั้น");
+      return;
+    }
+
+    setForm((current) => ({ ...current, phone: value }));
+
+    if (value.length > 0 && !/^0\d{0,9}$/.test(value)) {
+      setPhoneError("เบอร์ต้องขึ้นต้นด้วย 0");
+      return;
+    }
+
+    if (value.length === 10 && !/^0\d{9}$/.test(value)) {
+      setPhoneError("เบอร์โทรไม่ถูกต้อง");
+      return;
+    }
+
+    setPhoneError("");
+  }
+
   async function uploadSlip() {
     if (!form.slipFile) {
       return "";
     }
 
-    const dataUrl = await fileToDataUrl(form.slipFile);
+    const formData = new FormData();
+    formData.append("category", "slip");
+    formData.append("image", form.slipFile);
 
     const response = await fetch("/api/upload", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        category: "slip",
-        fileName: form.slipFile.name,
-        mimeType: form.slipFile.type,
-        dataUrl
-      })
+      body: formData
     });
 
     const payload = await response.json();
@@ -125,9 +137,29 @@ export function CheckoutForm() {
       return;
     }
 
-    const confirmed = window.confirm("ยืนยันการสั่งซื้อใช่หรือไม่?");
+    if (!/^0\d{9}$/.test(form.phone)) {
+      setPhoneError("กรุณาใส่เบอร์โทรให้ถูกต้อง");
+      return;
+    }
 
-    if (!confirmed) {
+    if (promptPayNeedsSlip) {
+      setShowSlipError(true);
+      scrollToSlipUpload();
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: "ยืนยันคำสั่งซื้อ?",
+      text: "กรุณาตรวจสอบข้อมูลก่อนดำเนินการ",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "ยืนยัน",
+      cancelButtonText: "ยกเลิก",
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#6b7280"
+    });
+
+    if (!result.isConfirmed) {
       return;
     }
 
@@ -137,17 +169,6 @@ export function CheckoutForm() {
     try {
       if (orderItems.length === 0) {
         throw new Error("ยังไม่มีสินค้าในรายการสั่งซื้อ");
-      }
-
-      if (form.paymentMethod === "promptpay" && !form.slipFile) {
-        throw new Error("กรุณาอัปโหลดสลิปการโอนเงิน");
-      }
-
-      if (
-        form.paymentMethod === "card" &&
-        form.cardNumber.replace(/\s/g, "").length < 12
-      ) {
-        throw new Error("กรุณากรอกหมายเลขบัตร Visa ให้ถูกต้อง");
       }
 
       const paymentSlip =
@@ -164,7 +185,6 @@ export function CheckoutForm() {
           address: form.address,
           paymentMethod: form.paymentMethod,
           paymentSlip,
-          cardNumber: form.cardNumber,
           items: orderItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity
@@ -183,6 +203,15 @@ export function CheckoutForm() {
       }
 
       setForm(initialState);
+      setShowSlipError(false);
+      setPhoneError("");
+      await Swal.fire({
+        title: "สั่งซื้อสำเร็จ 🎉",
+        text: "ขอบคุณสำหรับการสั่งซื้อ เราจะดำเนินการจัดส่งให้เร็วที่สุด",
+        icon: "success",
+        confirmButtonText: "ตกลง",
+        confirmButtonColor: "#16a34a"
+      });
       router.push(
         `/thank-you?orderId=${encodeURIComponent(
           payload.order.id
@@ -193,7 +222,21 @@ export function CheckoutForm() {
       setMessage(
         error instanceof Error ? error.message : "ไม่สามารถทำรายการสั่งซื้อได้"
       );
+      await Swal.fire({
+        title: "เกิดข้อผิดพลาด",
+        text: "กรุณาลองใหม่อีกครั้ง",
+        icon: "error",
+        confirmButtonText: "ตกลง"
+      });
       setSubmitting(false);
+    }
+  }
+
+  function handleConfirmClick(event: React.MouseEvent<HTMLButtonElement>) {
+    if (promptPayNeedsSlip) {
+      event.preventDefault();
+      setShowSlipError(true);
+      scrollToSlipUpload();
     }
   }
 
@@ -232,11 +275,27 @@ export function CheckoutForm() {
           <span>เบอร์โทรศัพท์</span>
           <input
             required
+            type="text"
             value={form.phone}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, phone: event.target.value }))
-            }
+            placeholder="กรอกเบอร์โทร (10 หลัก)"
+            inputMode="numeric"
+            maxLength={10}
+            onChange={(event) => handlePhoneChange(event.target.value)}
+            style={{
+              borderColor: phoneError ? "#ef4444" : undefined
+            }}
           />
+          {phoneError ? (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "0.875rem",
+                margin: "0.35rem 0 0"
+              }}
+            >
+              {phoneError}
+            </p>
+          ) : null}
         </label>
 
         <label className="field">
@@ -261,9 +320,13 @@ export function CheckoutForm() {
                   name="paymentMethod"
                   value={option.id}
                   checked={form.paymentMethod === option.id}
-                  onChange={() =>
-                    setForm((current) => ({ ...current, paymentMethod: option.id }))
-                  }
+                  onChange={() => {
+                    setForm((current) => ({
+                      ...current,
+                      paymentMethod: option.id
+                    }));
+                    setShowSlipError(false);
+                  }}
                 />
                 <span>{option.label}</span>
               </label>
@@ -272,7 +335,7 @@ export function CheckoutForm() {
         </div>
 
         {form.paymentMethod === "promptpay" ? (
-          <div className="payment-panel">
+          <div className="payment-panel" id="slip-upload" ref={slipUploadRef}>
             <img
               src="/payments/promptpay-qr.svg"
               alt="คิวอาร์พร้อมเพย์"
@@ -286,71 +349,24 @@ export function CheckoutForm() {
               <input
                 type="file"
                 accept="image/*"
-                onChange={(event) =>
+                onChange={(event) => {
                   setForm((current) => ({
                     ...current,
                     slipFile: event.target.files?.[0] || null
-                  }))
-                }
+                  }));
+                  setShowSlipError(false);
+                }}
               />
             </label>
-          </div>
-        ) : null}
 
-        {form.paymentMethod === "card" ? (
-          <div className="payment-panel">
-            <label className="field">
-              <span>ชื่อบนบัตร</span>
-              <input
-                required
-                value={form.cardName}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    cardName: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>หมายเลขบัตร Visa</span>
-              <input
-                required
-                value={form.cardNumber}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    cardNumber: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <div className="two-columns">
-              <label className="field">
-                <span>วันหมดอายุ</span>
-                <input
-                  required
-                  placeholder="MM/YY"
-                  value={form.expiry}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      expiry: event.target.value
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>CVC</span>
-                <input
-                  required
-                  value={form.cvc}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, cvc: event.target.value }))
-                  }
-                />
-              </label>
-            </div>
+            {showSlipError ? (
+              <div className="slip-warning">
+                <span className="slip-warning-icon" aria-hidden="true">
+                  ⚠️
+                </span>
+                <span>กรุณาอัปโหลดสลิปการโอนเงินก่อน</span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -395,13 +411,17 @@ export function CheckoutForm() {
         <div style={{ marginTop: 6 }}>
           <button
             type="submit"
-            className="button button-primary full-width"
+            className="button full-width"
+            aria-disabled={submitting || promptPayNeedsSlip}
+            onClick={handleConfirmClick}
             disabled={submitting}
             style={{
               minHeight: 56,
               fontSize: "1rem",
               fontWeight: 700,
-              background: "#2f6fe0"
+              color: "#ffffff",
+              background: promptPayNeedsSlip ? "#9ca3af" : "#2563eb",
+              cursor: promptPayNeedsSlip ? "not-allowed" : "pointer"
             }}
           >
             {submitting ? "กำลังดำเนินการ..." : "ยืนยันการสั่งซื้อ"}
@@ -413,6 +433,43 @@ export function CheckoutForm() {
             กรุณาตรวจสอบข้อมูลก่อนยืนยัน
           </div>
         </div>
+
+        <style jsx>{`
+          .slip-warning {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            color: #ef4444;
+            font-size: 0.92rem;
+            animation: slip-warning-pulse 1.1s ease-in-out infinite;
+          }
+
+          .slip-warning-icon {
+            display: inline-flex;
+            animation: slip-warning-bounce 0.9s ease-in-out infinite;
+          }
+
+          @keyframes slip-warning-pulse {
+            0%,
+            100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.55;
+            }
+          }
+
+          @keyframes slip-warning-bounce {
+            0%,
+            100% {
+              transform: translateY(0);
+            }
+            50% {
+              transform: translateY(-2px);
+            }
+          }
+        `}</style>
       </form>
 
       <aside className="section-card">

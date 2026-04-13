@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import Swal from "sweetalert2";
 
 import { formatCurrency } from "@/lib/format";
 import { Product } from "@/types";
@@ -13,7 +14,7 @@ type ProductFormState = {
   description: string;
   youtubeUrl: string;
   images: string[];
-  files: File[];
+  isBestSeller: boolean;
 };
 
 const emptyForm: ProductFormState = {
@@ -24,17 +25,8 @@ const emptyForm: ProductFormState = {
   description: "",
   youtubeUrl: "",
   images: [],
-  files: []
+  isBestSeller: false
 };
-
-function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("ไม่สามารถอ่านไฟล์ได้"));
-    reader.readAsDataURL(file);
-  });
-}
 
 const controlButtonStyle = {
   minWidth: 38,
@@ -44,16 +36,19 @@ const controlButtonStyle = {
 } as const;
 
 export function AdminProductManager() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
+  const [imageUrl, setImageUrl] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   async function loadProducts() {
     const response = await fetch("/api/products");
-    const payload = await response.json();
-    setProducts(payload.products || []);
+    const data = await response.json();
+    setProducts(data.products || []);
   }
 
   useEffect(() => {
@@ -68,6 +63,7 @@ export function AdminProductManager() {
   useEffect(() => {
     if (!selectedProduct) {
       setForm(emptyForm);
+      setImageUrl("");
       return;
     }
 
@@ -79,9 +75,14 @@ export function AdminProductManager() {
       description: selectedProduct.description,
       youtubeUrl: selectedProduct.youtubeUrl || "",
       images: selectedProduct.images,
-      files: []
+      isBestSeller: selectedProduct.isBestSeller
     });
+    setImageUrl(selectedProduct.image || selectedProduct.images[0] || "");
   }, [selectedProduct]);
+
+  function syncPrimaryImage(nextImages: string[]) {
+    setImageUrl(nextImages[0] || "");
+  }
 
   function moveImage(index: number, direction: "up" | "down") {
     setForm((current) => {
@@ -94,6 +95,7 @@ export function AdminProductManager() {
       const nextImages = [...current.images];
       const [movedImage] = nextImages.splice(index, 1);
       nextImages.splice(nextIndex, 0, movedImage);
+      syncPrimaryImage(nextImages);
 
       return {
         ...current,
@@ -102,52 +104,99 @@ export function AdminProductManager() {
     });
   }
 
-  function removeImage(index: number) {
-    const confirmed = window.confirm("ต้องการลบรูปนี้ใช่หรือไม่?");
+  async function removeImage(index: number) {
+    const result = await Swal.fire({
+      title: "ต้องการลบสินค้านี้?",
+      text: "การลบจะไม่สามารถกู้คืนได้",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "ลบเลย",
+      cancelButtonText: "ยกเลิก",
+      confirmButtonColor: "#ef4444"
+    });
 
-    if (!confirmed) {
+    if (!result.isConfirmed) {
       return;
     }
 
-    setForm((current) => ({
-      ...current,
-      images: current.images.filter((_, imageIndex) => imageIndex !== index)
-    }));
+    setForm((current) => {
+      const nextImages = current.images.filter(
+        (_, imageIndex) => imageIndex !== index
+      );
+      syncPrimaryImage(nextImages);
+
+      return {
+        ...current,
+        images: nextImages
+      };
+    });
+
+    void Swal.fire({
+      title: "ลบสำเร็จ",
+      icon: "success",
+      timer: 1200,
+      showConfirmButton: false
+    });
   }
 
-  async function uploadImages() {
-    if (form.files.length === 0) {
-      return form.images;
+  async function uploadFile(file: File) {
+    const formData = new FormData();
+    formData.append("category", "product");
+    formData.append("image", file);
+
+    const response = await fetch("/api/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "อัปโหลดรูปภาพไม่สำเร็จ");
     }
 
-    const uploadedUrls: string[] = [];
+    setImageUrl(data.url);
+    return data.url as string;
+  }
 
-    for (const file of form.files) {
-      const dataUrl = await fileToDataUrl(file);
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          category: "product",
-          fileName: file.name,
-          mimeType: file.type,
-          dataUrl
-        })
-      });
+    if (files.length === 0) {
+      return;
+    }
 
-      const payload = await response.json();
+    setUploadingImages(true);
+    setMessage("");
 
-      if (!response.ok) {
-        throw new Error(payload.error || "อัปโหลดรูปภาพไม่สำเร็จ");
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const uploadedUrl = await uploadFile(file);
+        uploadedUrls.push(uploadedUrl);
       }
 
-      uploadedUrls.push(payload.url);
-    }
+      setForm((current) => {
+        const nextImages = [...current.images, ...uploadedUrls];
+        syncPrimaryImage(nextImages);
 
-    return [...form.images, ...uploadedUrls];
+        return {
+          ...current,
+          images: nextImages
+        };
+      });
+
+      setMessage("อัปโหลดรูปภาพเรียบร้อยแล้ว");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "อัปโหลดรูปภาพไม่สำเร็จ");
+    } finally {
+      setUploadingImages(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -156,7 +205,7 @@ export function AdminProductManager() {
     setMessage("");
 
     try {
-      const images = await uploadImages();
+      const primaryImage = imageUrl || form.images[0] || "";
 
       const response = await fetch("/api/products", {
         method: "POST",
@@ -170,17 +219,20 @@ export function AdminProductManager() {
           stock: Number(form.stock),
           description: form.description,
           youtubeUrl: form.youtubeUrl,
-          images
+          isBestSeller: form.isBestSeller,
+          image: primaryImage,
+          images: form.images.length > 0 ? form.images : primaryImage ? [primaryImage] : []
         })
       });
 
-      const payload = await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error || "บันทึกสินค้าไม่สำเร็จ");
+        throw new Error(data.error || "บันทึกสินค้าไม่สำเร็จ");
       }
 
       setForm(emptyForm);
+      setImageUrl("");
       setSelectedId("");
       setMessage("บันทึกสินค้าเรียบร้อยแล้ว");
       await loadProducts();
@@ -192,9 +244,17 @@ export function AdminProductManager() {
   }
 
   async function handleDelete(id: string) {
-    const confirmed = window.confirm("ต้องการลบสินค้านี้ใช่หรือไม่?");
+    const result = await Swal.fire({
+      title: "ต้องการลบสินค้านี้?",
+      text: "การลบจะไม่สามารถกู้คืนได้",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "ลบเลย",
+      cancelButtonText: "ยกเลิก",
+      confirmButtonColor: "#ef4444"
+    });
 
-    if (!confirmed) {
+    if (!result.isConfirmed) {
       return;
     }
 
@@ -202,15 +262,21 @@ export function AdminProductManager() {
       method: "DELETE"
     });
 
-    const payload = await response.json();
+    const data = await response.json();
 
     if (!response.ok) {
-      setMessage(payload.error || "ลบสินค้าไม่สำเร็จ");
+      setMessage(data.error || "ลบสินค้าไม่สำเร็จ");
       return;
     }
 
     setMessage("ลบสินค้าเรียบร้อยแล้ว");
     setSelectedId("");
+    await Swal.fire({
+      title: "ลบสำเร็จ",
+      icon: "success",
+      timer: 1200,
+      showConfirmButton: false
+    });
     await loadProducts();
   }
 
@@ -286,20 +352,62 @@ export function AdminProductManager() {
             />
           </label>
 
-          <label className="field">
-            <span>อัปโหลดรูปสินค้า</span>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              fontSize: "0.95rem"
+            }}
+          >
             <input
-              type="file"
-              accept="image/*"
-              multiple
+              type="checkbox"
+              checked={form.isBestSeller}
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
-                  files: Array.from(event.target.files || [])
+                  isBestSeller: event.target.checked
                 }))
               }
             />
+            <span>ตั้งเป็นสินค้าขายดี 🔥</span>
           </label>
+
+          <label className="field">
+            <span>อัปโหลดรูปสินค้า</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleFileChange}
+            />
+          </label>
+
+          {imageUrl ? (
+            <div style={{ display: "grid", gap: 8 }}>
+              <span className="muted-text" style={{ fontSize: "0.9rem" }}>
+                รูปหลักที่จะบันทึก
+              </span>
+              <img
+                src={imageUrl}
+                alt="รูปหลักสินค้า"
+                style={{
+                  width: 120,
+                  height: 120,
+                  objectFit: "cover",
+                  borderRadius: 14,
+                  border: "1px solid var(--line)"
+                }}
+              />
+            </div>
+          ) : null}
+
+          {uploadingImages ? (
+            <p className="muted-text" style={{ marginTop: -4 }}>
+              กำลังอัปโหลดรูปภาพ...
+            </p>
+          ) : null}
 
           {form.images.length > 0 ? (
             <div className="thumbnail-list" style={{ gap: 14 }}>
@@ -385,7 +493,11 @@ export function AdminProductManager() {
           {message ? <p className="form-message">{message}</p> : null}
 
           <div className="button-row">
-            <button type="submit" className="button button-primary" disabled={saving}>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={saving || uploadingImages}
+            >
               {saving ? "กำลังบันทึก..." : "บันทึกสินค้า"}
             </button>
 
@@ -396,6 +508,7 @@ export function AdminProductManager() {
                 onClick={() => {
                   setSelectedId("");
                   setForm(emptyForm);
+                  setImageUrl("");
                 }}
               >
                 ล้างข้อมูล
@@ -411,14 +524,14 @@ export function AdminProductManager() {
           {products.map((product) => (
             <article key={product.id} className="admin-product-card">
               <img
-                src={product.images[0] || ""}
+                src={product.image || product.images[0] || ""}
                 alt={product.name}
                 className="admin-product-image"
               />
               <div className="admin-product-content">
                 <strong>{product.name}</strong>
                 <span className="muted-text">
-                  {formatCurrency(product.price)} · สต๊อก {product.stock}
+                  {formatCurrency(product.price)} | สต๊อก {product.stock}
                 </span>
               </div>
               <div className="button-row">

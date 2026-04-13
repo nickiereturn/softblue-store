@@ -1,8 +1,7 @@
 import { PaymentMethod } from "@/types";
 
 export const paymentOptions: Array<{ id: PaymentMethod; label: string }> = [
-  { id: "promptpay", label: "พร้อมเพย์" },
-  { id: "card", label: "บัตรเครดิต (Visa)" },
+  { id: "promptpay", label: "PromptPay" },
   { id: "cod", label: "เก็บเงินปลายทาง" }
 ];
 

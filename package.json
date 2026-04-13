@@ -3,19 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "cross-env NEXT_RUNTIME=webpack next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
+    "cloudinary": "^2.9.0",
     "cookie": "1.0.2",
-    "next": "latest",
-    "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "next": "14.2.5",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "sweetalert2": "^11.26.24"
   },
   "devDependencies": {
     "@types/node": "22.13.14",
-    "@types/react": "19.0.10",
+    "@types/react": "18.3.3",
+    "cross-env": "^10.1.0",
     "typescript": "5.8.2"
   }
 }

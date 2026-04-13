@@ -4,8 +4,11 @@ export type Product = {
   price: number;
   stock: number;
   description: string;
+  image: string;
   images: string[];
   youtubeUrl?: string;
+  isBestSeller: boolean;
+  createdAt: string;
 };
 
 export type CartItem = {
@@ -21,7 +24,7 @@ export type OrderItem = {
   image: string;
 };
 
-export type PaymentMethod = "promptpay" | "card" | "cod";
+export type PaymentMethod = "promptpay" | "cod";
 export type PaymentStatus = "pending" | "confirmed";
 export type OrderStatus = "pending" | "shipped";
 
@@ -33,7 +36,6 @@ export type Order = {
   paymentMethod: PaymentMethod;
   paymentSlip?: string;
   paymentStatus: PaymentStatus;
-  cardLast4?: string;
   total: number;
   createdAt: string;
   items: OrderItem[];

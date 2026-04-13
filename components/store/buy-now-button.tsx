@@ -16,11 +16,11 @@ export function BuyNowButton({
   return (
     <button
       type="button"
-      className="button button-primary"
+      className="button buy-now-button"
       disabled={disabled}
       onClick={() => router.push(`/checkout?buyNow=${productId}`)}
     >
-      ซื้อเลย
+      สั่งซื้อทันที 🔥
     </button>
   );
 }

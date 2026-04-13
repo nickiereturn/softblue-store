@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Swal from "sweetalert2";
 
 import { useCart } from "@/components/store/cart-context";
 import { Product } from "@/types";
@@ -20,6 +21,13 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
       disabled={product.stock < 1}
       onClick={() => {
         addItem(product.id, 1);
+        Swal.fire({
+          title: "เพิ่มลงตะกร้าแล้ว 🛒",
+          text: "สินค้าอยู่ในตะกร้าของคุณแล้ว",
+          icon: "success",
+          timer: 1500,
+          showConfirmButton: false
+        });
         setAdded(true);
         window.setTimeout(() => setAdded(false), 1500);
       }}

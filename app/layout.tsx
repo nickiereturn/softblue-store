@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CartProvider } from "@/components/store/cart-context";
+import { FakePurchaseNotice } from "@/components/store/fake-purchase-notice";
 import { Header } from "@/components/store/header";
 
 import "./globals.css";
@@ -22,6 +23,7 @@ export default function RootLayout({
           <div className="site-shell">
             <Header />
             <main className="main-shell container">{children}</main>
+            <FakePurchaseNotice />
           </div>
         </CartProvider>
       </body>

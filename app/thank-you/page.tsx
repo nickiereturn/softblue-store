@@ -13,7 +13,7 @@ type ThankYouPageProps = {
 };
 
 function getPaymentMethod(value?: string): PaymentMethod | null {
-  if (value === "promptpay" || value === "card" || value === "cod") {
+  if (value === "promptpay" || value === "cod") {
     return value;
   }
 
@@ -26,14 +26,6 @@ function getContent(paymentMethod: PaymentMethod | null) {
       title: "สั่งซื้อสำเร็จ 🎉",
       message:
         "คำสั่งซื้อของคุณสำเร็จแล้ว เมื่อทางร้านตรวจสอบสลิปเรียบร้อยแล้ว เราจะดำเนินการจัดส่งให้ทันที ขอบคุณที่ใช้บริการ"
-    };
-  }
-
-  if (paymentMethod === "card") {
-    return {
-      title: "ชำระเงินสำเร็จ 🎉",
-      message:
-        "ทางร้านได้รับคำสั่งซื้อของคุณเรียบร้อย เราจะดำเนินการจัดส่งสินค้าให้เร็วที่สุด ขอบคุณที่ใช้บริการ"
     };
   }
 
@@ -84,7 +76,7 @@ export default async function ThankYouPage({
             }}
           >
             <div className="muted-text" style={{ marginBottom: 6 }}>
-              เลขที่คำสั่งซื้อ
+              หมายเลขคำสั่งซื้อ
             </div>
             <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>{params.orderId}</div>
           </div>
@@ -93,7 +85,7 @@ export default async function ThankYouPage({
           </div>
           {paymentMethod ? (
             <div className="muted-text">
-              ช่องทางชำระเงิน: {formatPaymentMethod(paymentMethod)}
+              วิธีชำระเงิน: {formatPaymentMethod(paymentMethod)}
             </div>
           ) : null}
         </div>
