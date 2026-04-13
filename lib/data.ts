@@ -1,6 +1,16 @@
 import { promises as fs } from "fs";
 import path from "path";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  updateDoc
+} from "firebase/firestore";
 
+import { db } from "@/lib/firebase";
 import {
   Order,
   OrderItem,
@@ -12,7 +22,6 @@ import {
 
 const dataDir = path.join(process.cwd(), "data");
 const productFile = path.join(dataDir, "products.json");
-const orderFile = path.join(dataDir, "orders.json");
 
 async function ensureDataFile(filePath: string, fallback: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -157,12 +166,34 @@ function normalizePaymentStatus(
   return paymentMethod === "promptpay" ? "pending" : "confirmed";
 }
 
-type StoredOrder = Omit<Order, "paymentSlip" | "paymentStatus" | "status"> & {
+type StoredOrder = Omit<Order, "paymentSlip" | "paymentStatus" | "status" | "createdAt"> & {
   paymentSlip?: string;
   paymentStatus?: string;
   promptPaySlipUrl?: string;
   status?: string;
+  createdAt?: unknown;
 };
+
+function normalizeCreatedAt(value: unknown) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: () => Date }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return new Date().toISOString();
+}
 
 function normalizeOrder(order: StoredOrder): Order {
   return {
@@ -172,13 +203,22 @@ function normalizeOrder(order: StoredOrder): Order {
       order.paymentMethod,
       order.paymentStatus
     ),
+    createdAt: normalizeCreatedAt(order.createdAt),
     status: normalizeOrderStatus(order.status)
   };
 }
 
 export async function getOrders() {
-  const orders = await readJsonFile<StoredOrder[]>(orderFile, []);
-  return orders.map(normalizeOrder);
+  const snapshot = await getDocs(
+    query(collection(db, "orders"), orderBy("createdAt", "desc"))
+  );
+
+  return snapshot.docs.map((entry) =>
+    normalizeOrder({
+      id: entry.id,
+      ...(entry.data() as Omit<StoredOrder, "id">)
+    })
+  );
 }
 
 type OrderInput = {
@@ -192,7 +232,6 @@ type OrderInput = {
 
 export async function createOrder(input: OrderInput) {
   const products = await getProducts();
-  const orders = await getOrders();
 
   const items: OrderItem[] = input.items.map((item) => {
     const product = products.find((entry) => entry.id === item.productId);
@@ -236,8 +275,7 @@ export async function createOrder(input: OrderInput) {
     };
   });
 
-  const order: Order = {
-    id: crypto.randomUUID(),
+  const order: Omit<Order, "id"> = {
     customerName: input.customerName,
     phone: input.phone,
     address: input.address,
@@ -251,46 +289,53 @@ export async function createOrder(input: OrderInput) {
     status: "pending"
   };
 
-  orders.unshift(order);
   await writeJsonFile(productFile, nextProducts);
-  await writeJsonFile(orderFile, orders);
 
-  return order;
+  const orderRef = await addDoc(collection(db, "orders"), {
+    ...order,
+    createdAt: new Date(order.createdAt)
+  });
+
+  return {
+    id: orderRef.id,
+    ...order
+  };
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
-  const orders = await getOrders();
-  const index = orders.findIndex((order) => order.id === orderId);
+  const nextStatus = normalizeOrderStatus(status);
 
-  if (index < 0) {
+  await updateDoc(doc(db, "orders", orderId), {
+    status: nextStatus
+  });
+
+  const orders = await getOrders();
+  const order = orders.find((entry) => entry.id === orderId);
+
+  if (!order) {
     throw new Error("ไม่พบคำสั่งซื้อ");
   }
 
-  orders[index] = {
-    ...orders[index],
-    status: normalizeOrderStatus(status)
-  };
-
-  await writeJsonFile(orderFile, orders);
-  return orders[index];
+  return order;
 }
 
 export async function updateOrderPaymentStatus(
   orderId: string,
   paymentStatus: PaymentStatus
 ) {
-  const orders = await getOrders();
-  const index = orders.findIndex((order) => order.id === orderId);
+  const nextPaymentStatus =
+    paymentStatus === "confirmed" ? "confirmed" : "pending";
 
-  if (index < 0) {
+  await updateDoc(doc(db, "orders", orderId), {
+    paymentStatus: nextPaymentStatus
+  });
+
+  const orders = await getOrders();
+  const order = orders.find((entry) => entry.id === orderId);
+
+  if (!order) {
     throw new Error("ไม่พบคำสั่งซื้อ");
   }
 
-  orders[index] = {
-    ...orders[index],
-    paymentStatus
-  };
-
-  await writeJsonFile(orderFile, orders);
-  return orders[index];
+  return order;
 }
