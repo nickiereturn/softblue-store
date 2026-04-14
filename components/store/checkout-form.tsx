@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import Swal from "sweetalert2";
 
 import { useCart } from "@/components/store/cart-context";
 import { paymentOptions } from "@/lib/constants";
+import { db } from "@/lib/firebase";
 import { formatCurrency } from "@/lib/format";
 import { Product } from "@/types";
 
@@ -39,11 +41,29 @@ export function CheckoutForm() {
   const [submitting, setSubmitting] = useState(false);
   const [showSlipError, setShowSlipError] = useState(false);
   const [phoneError, setPhoneError] = useState("");
+  const [qr, setQr] = useState("");
 
   useEffect(() => {
     fetch("/api/products")
       .then((response) => response.json())
       .then((data) => setProducts(data.products || []));
+  }, []);
+
+  useEffect(() => {
+    const fetchQr = async () => {
+      const docRef = doc(db, "settings", "payment");
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const promptpayQR = docSnap.data().promptpayQR;
+
+        if (typeof promptpayQR === "string") {
+          setQr(promptpayQR);
+        }
+      }
+    };
+
+    void fetchQr();
   }, []);
 
   useEffect(() => {
@@ -336,11 +356,15 @@ export function CheckoutForm() {
 
         {form.paymentMethod === "promptpay" ? (
           <div className="payment-panel" id="slip-upload" ref={slipUploadRef}>
-            <img
-              src="/payments/promptpay-qr.svg"
-              alt="คิวอาร์พร้อมเพย์"
-              className="promptpay-image"
-            />
+            {qr ? (
+              <img
+                src={qr}
+                alt="PromptPay QR"
+                className="promptpay-image"
+              />
+            ) : (
+              <div className="muted-text">ยังไม่มี QR พร้อมเพย์สำหรับการชำระเงิน</div>
+            )}
             <p className="muted-text" style={{ marginTop: 0 }}>
               กรุณาโอนเงินตามยอดและแนบสลิป
             </p>
