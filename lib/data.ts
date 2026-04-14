@@ -1,12 +1,10 @@
-import { promises as fs } from "fs";
-import path from "path";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
+  getDoc,
   getDocs,
-  orderBy,
-  query,
   updateDoc
 } from "firebase/firestore";
 
@@ -20,36 +18,8 @@ import {
   Product
 } from "@/types";
 
-const dataDir = path.join(process.cwd(), "data");
-const productFile = path.join(dataDir, "products.json");
-
-async function ensureDataFile(filePath: string, fallback: string) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-
-  try {
-    await fs.access(filePath);
-  } catch {
-    await fs.writeFile(filePath, fallback, "utf8");
-  }
-}
-
-async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
-  await ensureDataFile(filePath, JSON.stringify(fallback, null, 2));
-  const raw = await fs.readFile(filePath, "utf8");
-  return JSON.parse(raw) as T;
-}
-
-async function writeJsonFile<T>(filePath: string, value: T) {
-  await ensureDataFile(filePath, JSON.stringify(value, null, 2));
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
-
-type StoredProduct = Omit<Product, "image" | "images" | "isBestSeller" | "createdAt"> & {
-  image?: string;
-  images?: string[];
-  isBestSeller?: boolean;
-  createdAt?: string;
-};
+const productsCollection = collection(db, "products");
+const ordersCollection = collection(db, "orders");
 
 type ProductInput = {
   id?: string;
@@ -61,8 +31,46 @@ type ProductInput = {
   images?: string[];
   youtubeUrl?: string;
   isBestSeller?: boolean;
-  createdAt?: string;
+  createdAt?: unknown;
 };
+
+type StoredOrder = Omit<Order, "paymentSlip" | "paymentStatus" | "status" | "createdAt"> & {
+  paymentSlip?: string;
+  paymentStatus?: string;
+  promptPaySlipUrl?: string;
+  status?: string;
+  createdAt?: unknown;
+};
+
+type OrderInput = {
+  customerName: string;
+  phone: string;
+  address: string;
+  paymentMethod: PaymentMethod;
+  paymentSlip?: string;
+  items: Array<{ productId: string; quantity: number }>;
+};
+
+function normalizeCreatedAt(value: unknown) {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: () => Date }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  return new Date().toISOString();
+}
 
 function normalizeProduct(
   input: ProductInput,
@@ -73,7 +81,7 @@ function normalizeProduct(
 ): Product {
   const primaryImage = input.image || input.images?.[0] || "";
   const images =
-    input.images && input.images.length > 0
+    Array.isArray(input.images) && input.images.length > 0
       ? input.images
       : primaryImage
         ? [primaryImage]
@@ -93,62 +101,14 @@ function normalizeProduct(
         ? input.isBestSeller
         : options?.existingProduct?.isBestSeller || false,
     createdAt:
-      input.createdAt ||
+      normalizeCreatedAt(input.createdAt) ||
       options?.existingProduct?.createdAt ||
       new Date().toISOString()
   };
 }
 
-function normalizeStoredProduct(product: StoredProduct): Product {
-  return normalizeProduct(product, {
-    existingId: product.id,
-    existingProduct: null
-  });
-}
-
-export async function getProducts() {
-  const products = await readJsonFile<StoredProduct[]>(productFile, []);
-  return products.map(normalizeStoredProduct);
-}
-
-export async function getProductById(id: string) {
-  const products = await getProducts();
-  return products.find((product) => product.id === id) || null;
-}
-
-export async function saveProduct(input: ProductInput) {
-  const products = await getProducts();
-  const index = input.id
-    ? products.findIndex((product) => product.id === input.id)
-    : -1;
-  const existingProduct = index >= 0 ? products[index] : null;
-  const product = normalizeProduct(input, {
-    existingId: existingProduct?.id,
-    existingProduct
-  });
-
-  if (index >= 0) {
-    products[index] = product;
-  } else {
-    products.unshift(product);
-  }
-
-  await writeJsonFile(productFile, products);
-  return product;
-}
-
-export async function deleteProduct(id: string) {
-  const products = await getProducts();
-  const nextProducts = products.filter((product) => product.id !== id);
-  await writeJsonFile(productFile, nextProducts);
-}
-
 function normalizeOrderStatus(status?: string): OrderStatus {
-  if (status === "shipped") {
-    return "shipped";
-  }
-
-  return "pending";
+  return status === "shipped" ? "shipped" : "pending";
 }
 
 function normalizePaymentStatus(
@@ -166,35 +126,6 @@ function normalizePaymentStatus(
   return paymentMethod === "promptpay" ? "pending" : "confirmed";
 }
 
-type StoredOrder = Omit<Order, "paymentSlip" | "paymentStatus" | "status" | "createdAt"> & {
-  paymentSlip?: string;
-  paymentStatus?: string;
-  promptPaySlipUrl?: string;
-  status?: string;
-  createdAt?: unknown;
-};
-
-function normalizeCreatedAt(value: unknown) {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "toDate" in value &&
-    typeof (value as { toDate: () => Date }).toDate === "function"
-  ) {
-    return (value as { toDate: () => Date }).toDate().toISOString();
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  return new Date().toISOString();
-}
-
 function normalizeOrder(order: StoredOrder): Order {
   return {
     ...order,
@@ -208,34 +139,104 @@ function normalizeOrder(order: StoredOrder): Order {
   };
 }
 
-export async function getOrders() {
-  const snapshot = await getDocs(
-    query(collection(db, "orders"), orderBy("createdAt", "desc"))
+export async function getProducts() {
+  const snapshot = await getDocs(productsCollection);
+  const products = snapshot.docs.map((entry) =>
+    normalizeProduct(entry.data() as ProductInput, {
+      existingId: entry.id,
+      existingProduct: null
+    })
   );
 
-  return snapshot.docs.map((entry) =>
+  return products.sort(
+    (first, second) =>
+      new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
+  );
+}
+
+export async function getProductById(id: string) {
+  const snapshot = await getDoc(doc(db, "products", id));
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeProduct(snapshot.data() as ProductInput, {
+    existingId: snapshot.id,
+    existingProduct: null
+  });
+}
+
+export async function saveProduct(input: ProductInput) {
+  if (input.id) {
+    const existingProduct = await getProductById(input.id);
+    const product = normalizeProduct(input, {
+      existingId: input.id,
+      existingProduct
+    });
+
+    await updateDoc(doc(db, "products", input.id), {
+      name: product.name,
+      price: product.price,
+      stock: product.stock,
+      description: product.description,
+      image: product.image,
+      images: product.images,
+      youtubeUrl: product.youtubeUrl,
+      isBestSeller: product.isBestSeller,
+      createdAt: product.createdAt
+    });
+
+    return product;
+  }
+
+  const product = normalizeProduct(input);
+  const created = await addDoc(productsCollection, {
+    name: product.name,
+    price: product.price,
+    stock: product.stock,
+    description: product.description,
+    image: product.image,
+    images: product.images,
+    youtubeUrl: product.youtubeUrl,
+    isBestSeller: product.isBestSeller,
+    createdAt: product.createdAt
+  });
+
+  return {
+    ...product,
+    id: created.id
+  };
+}
+
+export async function deleteProduct(id: string) {
+  await deleteDoc(doc(db, "products", id));
+}
+
+export async function getOrders() {
+  const snapshot = await getDocs(ordersCollection);
+  const orders = snapshot.docs.map((entry) =>
     normalizeOrder({
       id: entry.id,
       ...(entry.data() as Omit<StoredOrder, "id">)
     })
   );
+
+  return orders.sort(
+    (first, second) =>
+      new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()
+  );
 }
 
-type OrderInput = {
-  customerName: string;
-  phone: string;
-  address: string;
-  paymentMethod: PaymentMethod;
-  paymentSlip?: string;
-  items: Array<{ productId: string; quantity: number }>;
-};
-
 export async function createOrder(input: OrderInput) {
-  const products = await getProducts();
+  const products = await Promise.all(
+    input.items.map(async (item) => {
+      const product = await getProductById(item.productId);
+      return { item, product };
+    })
+  );
 
-  const items: OrderItem[] = input.items.map((item) => {
-    const product = products.find((entry) => entry.id === item.productId);
-
+  const items: OrderItem[] = products.map(({ item, product }) => {
     if (!product) {
       throw new Error("ไม่พบสินค้า");
     }
@@ -262,18 +263,15 @@ export async function createOrder(input: OrderInput) {
     0
   );
 
-  const nextProducts = products.map((product) => {
-    const orderItem = items.find((item) => item.productId === product.id);
-
-    if (!orderItem) {
-      return product;
+  for (const { item, product } of products) {
+    if (!product) {
+      continue;
     }
 
-    return {
-      ...product,
-      stock: product.stock - orderItem.quantity
-    };
-  });
+    await updateDoc(doc(db, "products", product.id), {
+      stock: product.stock - item.quantity
+    });
+  }
 
   const order: Omit<Order, "id"> = {
     customerName: input.customerName,
@@ -289,34 +287,39 @@ export async function createOrder(input: OrderInput) {
     status: "pending"
   };
 
-  await writeJsonFile(productFile, nextProducts);
-
-  const orderRef = await addDoc(collection(db, "orders"), {
-    ...order,
-    createdAt: new Date(order.createdAt)
+  const created = await addDoc(ordersCollection, {
+    customerName: order.customerName,
+    phone: order.phone,
+    address: order.address,
+    paymentMethod: order.paymentMethod,
+    paymentSlip: order.paymentSlip,
+    paymentStatus: order.paymentStatus,
+    total: order.total,
+    createdAt: new Date(order.createdAt),
+    items: order.items,
+    status: order.status
   });
 
   return {
-    id: orderRef.id,
+    id: created.id,
     ...order
   };
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const nextStatus = normalizeOrderStatus(status);
+  await updateDoc(doc(db, "orders", orderId), { status: nextStatus });
 
-  await updateDoc(doc(db, "orders", orderId), {
-    status: nextStatus
-  });
+  const order = await getDoc(doc(db, "orders", orderId));
 
-  const orders = await getOrders();
-  const order = orders.find((entry) => entry.id === orderId);
-
-  if (!order) {
+  if (!order.exists()) {
     throw new Error("ไม่พบคำสั่งซื้อ");
   }
 
-  return order;
+  return normalizeOrder({
+    id: order.id,
+    ...(order.data() as Omit<StoredOrder, "id">)
+  });
 }
 
 export async function updateOrderPaymentStatus(
@@ -330,12 +333,14 @@ export async function updateOrderPaymentStatus(
     paymentStatus: nextPaymentStatus
   });
 
-  const orders = await getOrders();
-  const order = orders.find((entry) => entry.id === orderId);
+  const order = await getDoc(doc(db, "orders", orderId));
 
-  if (!order) {
+  if (!order.exists()) {
     throw new Error("ไม่พบคำสั่งซื้อ");
   }
 
-  return order;
+  return normalizeOrder({
+    id: order.id,
+    ...(order.data() as Omit<StoredOrder, "id">)
+  });
 }

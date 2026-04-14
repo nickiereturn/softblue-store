@@ -60,7 +60,7 @@ export default async function handler(
     }
 
     const orders = await getOrders();
-    return response.status(200).json({ orders });
+    return response.status(200).json({ success: true, orders });
   }
 
   if (request.method === "POST") {
@@ -85,7 +85,7 @@ export default async function handler(
         console.error("LINE notification failed", lineError);
       }
 
-      return response.status(200).json({ order });
+      return response.status(200).json({ success: true, order });
     } catch (error) {
       return response.status(400).json({
         error:
@@ -108,12 +108,12 @@ export default async function handler(
     try {
       if (isValidStatus(status)) {
         const order = await updateOrderStatus(orderId, status);
-        return response.status(200).json({ order });
+        return response.status(200).json({ success: true, order });
       }
 
       if (isValidPaymentStatus(paymentStatus)) {
         const order = await updateOrderPaymentStatus(orderId, paymentStatus);
-        return response.status(200).json({ order });
+        return response.status(200).json({ success: true, order });
       }
 
       return response.status(400).json({ error: "ข้อมูลสถานะไม่ถูกต้อง" });
