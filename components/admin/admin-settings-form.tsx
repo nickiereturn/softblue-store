@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 
 export function AdminSettingsForm() {
   const [promptpayNumber, setPromptpayNumber] = useState("");
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -20,7 +21,7 @@ export function AdminSettingsForm() {
           const value = docSnap.data().promptpayNumber;
 
           if (typeof value === "string") {
-            setPromptpayNumber(value);
+            setPromptpayNumber(value.replace(/\D/g, "").slice(0, 10));
           }
         }
       } catch {
@@ -33,9 +34,25 @@ export function AdminSettingsForm() {
     void fetchData();
   }, []);
 
+  function handleChange(value: string) {
+    const cleaned = value.replace(/\D/g, "").slice(0, 10);
+
+    setPromptpayNumber(cleaned);
+    setMessage("");
+
+    if (cleaned.length === 0) {
+      setError("");
+    } else if (cleaned.length !== 10) {
+      setError("กรุณากรอกเบอร์ให้ครบ 10 หลัก");
+    } else {
+      setError("");
+    }
+  }
+
   async function handleSave() {
-    if (!promptpayNumber.trim()) {
-      setMessage("กรุณากรอกเบอร์ PromptPay");
+    if (promptpayNumber.length !== 10) {
+      setError("กรุณากรอกเบอร์ให้ครบ 10 หลัก");
+      alert("กรุณากรอกเบอร์ให้ถูกต้อง");
       return;
     }
 
@@ -46,7 +63,7 @@ export function AdminSettingsForm() {
       await setDoc(
         doc(db, "settings", "payment"),
         {
-          promptpayNumber: promptpayNumber.trim()
+          promptpayNumber
         },
         { merge: true }
       );
@@ -67,14 +84,27 @@ export function AdminSettingsForm() {
           <span>เบอร์ PromptPay ปัจจุบัน</span>
           <input
             type="text"
-            placeholder="กรอกเบอร์ PromptPay"
             value={promptpayNumber}
-            onChange={(event) => {
-              setPromptpayNumber(event.target.value);
-              setMessage("");
-            }}
+            onChange={(event) => handleChange(event.target.value)}
+            placeholder="กรอกเบอร์ PromptPay (10 หลัก)"
+            inputMode="numeric"
+            maxLength={10}
             disabled={loading || saving}
+            style={{
+              borderColor: error ? "#ef4444" : undefined
+            }}
           />
+          {error ? (
+            <p
+              style={{
+                color: "#ef4444",
+                fontSize: "0.875rem",
+                margin: "0.35rem 0 0"
+              }}
+            >
+              {error}
+            </p>
+          ) : null}
         </label>
 
         <p className="muted-text" style={{ marginTop: -4 }}>
@@ -86,11 +116,22 @@ export function AdminSettingsForm() {
         <div className="button-row">
           <button
             type="button"
-            className="button button-primary"
             onClick={handleSave}
-            disabled={loading || saving}
+            disabled={loading || saving || promptpayNumber.length !== 10}
+            className="button"
+            style={{
+              background:
+                loading || saving || promptpayNumber.length !== 10
+                  ? "#9ca3af"
+                  : "#2563eb",
+              color: "#ffffff",
+              cursor:
+                loading || saving || promptpayNumber.length !== 10
+                  ? "not-allowed"
+                  : "pointer"
+            }}
           >
-            {saving ? "กำลังบันทึก..." : "บันทึกการตั้งค่า"}
+            {saving ? "กำลังบันทึก..." : "บันทึก"}
           </button>
         </div>
       </div>
