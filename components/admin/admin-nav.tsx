@@ -7,6 +7,7 @@ export function AdminNav() {
         <Link href="/admin">แดชบอร์ด</Link>
         <Link href="/admin/products">สินค้า</Link>
         <Link href="/admin/orders">คำสั่งซื้อ</Link>
+        <Link href="/admin/settings">ตั้งค่า</Link>
       </div>
       <form action="/api/admin/logout" method="post">
         <button type="submit" className="button button-secondary">
