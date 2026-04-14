@@ -41,7 +41,7 @@ export function CheckoutForm() {
   const [submitting, setSubmitting] = useState(false);
   const [showSlipError, setShowSlipError] = useState(false);
   const [phoneError, setPhoneError] = useState("");
-  const [qr, setQr] = useState("");
+  const [promptpayNumber, setPromptpayNumber] = useState("");
 
   useEffect(() => {
     fetch("/api/products")
@@ -50,20 +50,19 @@ export function CheckoutForm() {
   }, []);
 
   useEffect(() => {
-    const fetchQr = async () => {
-      const docRef = doc(db, "settings", "payment");
-      const docSnap = await getDoc(docRef);
+    const fetchNumber = async () => {
+      const docSnap = await getDoc(doc(db, "settings", "payment"));
 
       if (docSnap.exists()) {
-        const promptpayQR = docSnap.data().promptpayQR;
+        const value = docSnap.data().promptpayNumber;
 
-        if (typeof promptpayQR === "string") {
-          setQr(promptpayQR);
+        if (typeof value === "string") {
+          setPromptpayNumber(value);
         }
       }
     };
 
-    void fetchQr();
+    void fetchNumber();
   }, []);
 
   useEffect(() => {
@@ -96,6 +95,9 @@ export function CheckoutForm() {
     0
   );
 
+  const qrUrl = promptpayNumber
+    ? `https://promptpay.io/${promptpayNumber}/${total}.png`
+    : "";
   const promptPayNeedsSlip =
     form.paymentMethod === "promptpay" && !form.slipFile;
 
@@ -159,6 +161,11 @@ export function CheckoutForm() {
 
     if (!/^0\d{9}$/.test(form.phone)) {
       setPhoneError("กรุณาใส่เบอร์โทรให้ถูกต้อง");
+      return;
+    }
+
+    if (form.paymentMethod === "promptpay" && !promptpayNumber) {
+      setMessage("ร้านค้ายังไม่ได้ตั้งค่า PromptPay");
       return;
     }
 
@@ -346,6 +353,7 @@ export function CheckoutForm() {
                       paymentMethod: option.id
                     }));
                     setShowSlipError(false);
+                    setMessage("");
                   }}
                 />
                 <span>{option.label}</span>
@@ -356,15 +364,18 @@ export function CheckoutForm() {
 
         {form.paymentMethod === "promptpay" ? (
           <div className="payment-panel" id="slip-upload" ref={slipUploadRef}>
-            {qr ? (
+            {qrUrl ? (
               <img
-                src={qr}
+                src={qrUrl}
                 alt="PromptPay QR"
                 className="promptpay-image"
               />
             ) : (
-              <div className="muted-text">ยังไม่มี QR พร้อมเพย์สำหรับการชำระเงิน</div>
+              <div className="muted-text">ยังไม่มีการตั้งค่าเบอร์ PromptPay</div>
             )}
+            <p className="muted-text" style={{ marginTop: 0, textAlign: "center" }}>
+              กรุณาชำระเงินจำนวน {formatCurrency(total)}
+            </p>
             <p className="muted-text" style={{ marginTop: 0 }}>
               กรุณาโอนเงินตามยอดและแนบสลิป
             </p>
